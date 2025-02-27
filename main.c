@@ -14,7 +14,7 @@
 #include "decompose.h"
 
 /* default parameters */
-static const potrace_param_t param_default = {
+static const potrace_param_t param_default={
   2,                             /* turdsize */
   POTRACE_TURNPOLICY_MINORITY,   /* turnpolicy */
   1.0,                           /* alphamax */
@@ -33,7 +33,7 @@ int main(void) {
   potrace_bitmap_t *bm;
   potrace_param_t param;
   potrace_path_t *p;
-  path_t *plist = NULL;
+  path_t *plist=NULL;
 
   /* read the image */
   if (bm_read(stdin, 0.5, &bm)!=0) {
@@ -42,8 +42,8 @@ int main(void) {
   }
 
   /* set tracing parameters, starting from defaults */
-  param = param_default;
-  param.turdsize = 0;
+  param=param_default;
+  param.turdsize=0;
 
   /* process the image */
   if (bm_to_pathlist(bm, &plist, &param, NULL)!=0) {
@@ -56,20 +56,45 @@ int main(void) {
   printf("%%%%BoundingBox: 0 0 %d %d\n", bm->w, bm->h);
   printf("/p { 0.30 0 360 arc fill } bind def\n");
 
-  /* draw each curve */
+  /* fill curves */
   printf("\n");
-  printf("%% curves\n");
-  printf("1 0 0 setrgbcolor\n");
-  printf("0.15 setlinewidth\n");
-  for (p = plist; p != NULL; p = p->next) {
-    n = p->priv->len;
-    printf("%% n=%d orientation=%c area=%d\n", n,p->sign,p->area);
+  printf("%% fill curves\n");
+  printf("0.9 0.9 0.9 setrgbcolor\n");
+  for (p=plist; p!=NULL; p=p->next) {
+    n=p->priv->len;
+    printf("%%{\n");
+    printf("%% n: %d orientation: %c area: %d\n", n,p->sign,p->area);
     const char* op="moveto";
     for (i=0; i<n; i++) {
-	printf("%ld %ld %s %% %d\n", p->priv->pt[i].x, p->priv->pt[i].y,op,i);
-	op="lineto";
+        int j= (p->sign=='+') ? i : n-1-i;
+      printf("%ld %ld %s %% %d\n", p->priv->pt[j].x, p->priv->pt[j].y,op,j);
+      op="lineto";
     }
-    /* at the end of a group of a positive path and its negative children, fill. */
+    printf("%% closepath\n");
+    printf("%%}\n");
+    /* at the end of a group of a positive path and its negative children */
+    if (p->next == NULL || p->next->sign == '+') {
+      printf("fill\n");
+    }
+  }
+
+  /* draw curves */
+  printf("\n");
+  printf("%% stroke curves\n");
+  printf("1 0 0 setrgbcolor\n");
+  printf("0.15 setlinewidth\n");
+  for (p=plist; p!=NULL; p=p->next) {
+    n=p->priv->len;
+    printf("%%{\n");
+    printf("%% n: %d orientation: %c area: %d\n", n,p->sign,p->area);
+    const char* op="moveto";
+    for (i=0; i<n; i++) {
+      printf("%ld %ld %s %% %d\n", p->priv->pt[i].x, p->priv->pt[i].y,op,i);
+      op="lineto";
+    }
+    printf("%% closepath\n");
+    printf("%%}\n");
+    /* at the end of a group of a positive path and its negative children */
     if (p->next == NULL || p->next->sign == '+') {
       printf("stroke %% fill\n");
     }
@@ -79,11 +104,11 @@ int main(void) {
   printf("\n");
   printf("%% points\n");
   printf("0 0 0 setrgbcolor\n");
-  for (p = plist; p != NULL; p = p->next) {
-    n = p->priv->len;
+  for (p=plist; p!=NULL; p=p->next) {
+    n=p->priv->len;
     const char* op="p";
     for (i=0; i<n; i++) {
-	printf("%ld %ld %s %% %d\n", p->priv->pt[i].x, p->priv->pt[i].y,op,i);
+      printf("%ld %ld %s %% %d\n", p->priv->pt[i].x, p->priv->pt[i].y,op,i);
     }
   }
   printf("\n");
