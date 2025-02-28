@@ -1,21 +1,14 @@
 /* Extract path outlines using potrace; based on potracelib_demo.c */
 
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
-
 #include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-
 #include "potracelib.h"
 #include "bitmap.h"
 #include "bitmap_io.h"
+#include "curve.h"
 #include "decompose.h"
 
-/* default parameters */
-static const potrace_param_t param_default={
-  2,                             /* turdsize */
+static const potrace_param_t param={
+  0,                             /* turdsize */
   POTRACE_TURNPOLICY_MINORITY,   /* turnpolicy */
   1.0,                           /* alphamax */
   1,                             /* opticurve */
@@ -28,91 +21,74 @@ static const potrace_param_t param_default={
   },
 };
 
-int main(void) {
-  int i, n;
-  potrace_bitmap_t *bm;
-  potrace_param_t param;
+static void draw(path_t *plist, const char* s1, const char* s2, const char* s3) {
+  int i,n;
   potrace_path_t *p;
+  for (p=plist; p!=NULL; p=p->next) {
+    n=p->priv->len;
+    printf("%%{\n");
+    printf("%% n: %d orientation: %c area: %d\n",n,p->sign,p->area);
+    const char* op=s1;
+    for (i=0; i<n; i++) {
+      int j= (p->sign=='+') ? i : n-1-i;
+      printf("%ld %ld %s %% %d\n",p->priv->pt[j].x,p->priv->pt[j].y,op,j);
+      op=s2;
+    }
+    printf("%% closepath\n");
+    printf("%%}\n");
+    /* at the end of a group of a positive path and its negative children */
+    if (p->next==NULL || p->next->sign=='+') {
+      printf("%s",s3);
+    }
+  }
+}
+
+int main(void) {
+  FILE *input=stdin;
+  const double threshold=0.5;
+  potrace_bitmap_t *bm;
   path_t *plist=NULL;
 
   /* read the image */
-  if (bm_read(stdin, 0.5, &bm)!=0) {
-    fprintf(stderr, "bm_read failed\n");
+  if (bm_read(input,threshold,&bm)!=0) {
+    fprintf(stderr,"bm_read failed\n");
     return 1;
   }
-
-  /* set tracing parameters, starting from defaults */
-  param=param_default;
-  param.turdsize=0;
 
   /* process the image */
-  if (bm_to_pathlist(bm, &plist, &param, NULL)!=0) {
-    fprintf(stderr, "bm_to_pathlist failed\n");
+  if (bm_to_pathlist(bm,&plist,&param,NULL)!=0) {
+    fprintf(stderr,"bm_to_pathlist failed\n");
     return 1;
   }
 
-  /* output vector data as EPS file */
+  /* output EPS */
   printf("%%!PS-Adobe-2.0 EPSF-2.0\n");
-  printf("%%%%BoundingBox: 0 0 %d %d\n", bm->w, bm->h);
+  printf("%%%%BoundingBox: 0 0 %d %d\n",bm->w,bm->h);
   printf("/p { 0.30 0 360 arc fill } bind def\n");
+  printf("%% 1 setlinejoin 1 setlinecap\n");
 
   /* fill curves */
   printf("\n");
   printf("%% fill curves\n");
   printf("0.9 0.9 0.9 setrgbcolor\n");
-  for (p=plist; p!=NULL; p=p->next) {
-    n=p->priv->len;
-    printf("%%{\n");
-    printf("%% n: %d orientation: %c area: %d\n", n,p->sign,p->area);
-    const char* op="moveto";
-    for (i=0; i<n; i++) {
-        int j= (p->sign=='+') ? i : n-1-i;
-      printf("%ld %ld %s %% %d\n", p->priv->pt[j].x, p->priv->pt[j].y,op,j);
-      op="lineto";
-    }
-    printf("%% closepath\n");
-    printf("%%}\n");
-    /* at the end of a group of a positive path and its negative children */
-    if (p->next == NULL || p->next->sign == '+') {
-      printf("fill\n");
-    }
-  }
+  draw(plist,"moveto","lineto","fill\n");
 
-  /* draw curves */
+  /* stroke curves */
   printf("\n");
   printf("%% stroke curves\n");
   printf("1 0 0 setrgbcolor\n");
   printf("0.15 setlinewidth\n");
-  for (p=plist; p!=NULL; p=p->next) {
-    n=p->priv->len;
-    printf("%%{\n");
-    printf("%% n: %d orientation: %c area: %d\n", n,p->sign,p->area);
-    const char* op="moveto";
-    for (i=0; i<n; i++) {
-      printf("%ld %ld %s %% %d\n", p->priv->pt[i].x, p->priv->pt[i].y,op,i);
-      op="lineto";
-    }
-    printf("%% closepath\n");
-    printf("%%}\n");
-    /* at the end of a group of a positive path and its negative children */
-    if (p->next == NULL || p->next->sign == '+') {
-      printf("stroke %% fill\n");
-    }
-  }
+  draw(plist,"moveto","lineto","stroke\n");
 
   /* draw points */
   printf("\n");
   printf("%% points\n");
   printf("0 0 0 setrgbcolor\n");
-  for (p=plist; p!=NULL; p=p->next) {
-    n=p->priv->len;
-    const char* op="p";
-    for (i=0; i<n; i++) {
-      printf("%ld %ld %s %% %d\n", p->priv->pt[i].x, p->priv->pt[i].y,op,i);
-    }
-  }
+  draw(plist,"p","p","");
+
+  /* done */
   printf("\n");
-  printf("%%EOF\n");
+  printf("%%%%EOF\n");
 
   pathlist_free(plist);
   bm_free(bm);
