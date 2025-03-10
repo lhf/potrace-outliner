@@ -7,7 +7,7 @@
 #include "curve.h"
 #include "decompose.h"
 
-static const potrace_param_t param={
+static potrace_param_t param={
   0,                             /* turdsize */
   POTRACE_TURNPOLICY_MINORITY,   /* turnpolicy */
   1.0,                           /* alphamax */
